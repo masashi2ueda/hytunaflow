@@ -1,0 +1,9 @@
+defaults:
+  - train: t1
+  - _self_
+
+name: "test_train"
+mlflow:
+  experiment_name: "test_train"
+
+

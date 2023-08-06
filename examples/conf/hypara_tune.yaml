@@ -1,0 +1,5 @@
+defaults:
+  - train: t1
+  - optuna: op1
+  - _self_
+name: "test_optuna"
