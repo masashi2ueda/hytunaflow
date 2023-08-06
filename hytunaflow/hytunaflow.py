@@ -1,4 +1,5 @@
 # %%
+import copy
 import hydra
 import mlflow
 import optuna
@@ -28,7 +29,7 @@ class Hytunaflow:
                 Defaults to True.
         """
         self.cfg = cfg
-
+        print(cfg)
         if is_set_random_seed:
             random.seed(datetime.now().timestamp())
 
@@ -61,7 +62,7 @@ class Hytunaflow:
             bool: nested or not.
         """
         if "is_nested" in self.cfg["mlflow"].keys():
-            return self.cfg["mlflow"]["is_nested"]
+            return self.cfg.mlflow.is_nested
         return False
 
     @property
@@ -97,30 +98,68 @@ class Hytunaflow:
         # save to mlflow artifact path
         dst_storage_path = f"sqlite:///{self.artifact_dir_path}/optuna_study.db"
         dst_storage_file_path = dst_storage_path.replace("sqlite:///", "")
-
-        if self.cfg["optuna"]["src_storage_path"] is not None:
-            src_storage_path = self.cfg["optuna"]["src_storage_path"]
+        study_name = self.cfg.params.study_name
+        if utils.get_dict_val(self.cfg, "params.restart_storage_path") is not None:
+            src_storage_path = self.cfg.params.restart_storage_path
             shutil.copy(src_storage_path, dst_storage_file_path)
-        elif self.cfg["optuna"]["src_storage_runid"] is not None:
+        elif utils.get_dict_val(self.cfg, "params.restart_expeid") is not None:
             splts = dst_storage_file_path.split("/")
-            splts[-2] = self.cfg["optuna"]["src_storage_experimentid"]
-            splts[-3] = self.cfg["optuna"]["src_storage_runid"]
+            splts[-2] = self.cfg.params.restart_expeid
+            splts[-3] = self.cfg.params.restart_runid
+            src_storage_path = "/".join(splts)
+            shutil.copy(src_storage_path, dst_storage_file_path)
+        elif utils.get_dict_val(self.cfg, "params.restart_expname") is not None:
+            splts = dst_storage_file_path.split("/")
+            exp_name = self.cfg.params.restart_expname
+            run_name = self.cfg.params.restart_runname
+            mlrootpath = "/".join(splts[:-4])
+            exp_id, run_id = utils.exp_run_name2id(mlrootpath, exp_name, run_name)
+            splts[-3] = run_id
+            splts[-4] = exp_id
             src_storage_path = "/".join(splts)
             shutil.copy(src_storage_path, dst_storage_file_path)
 
+            f = open(f"{mlrootpath}/{exp_id}/{run_id}/params/params.study_name", 'r')
+            study_name = f.read()
+            f.close()
+            
+
         self.study = optuna.create_study(
-            study_name=self.cfg.optuna.study_name,
+            study_name=study_name,
             storage=dst_storage_path,
-            direction=self.cfg["optuna"]["direction"],
+            direction=self.cfg.params.direction,
             load_if_exists=True)
+
+        if utils.get_dict_val(self.cfg, "params.enqueue_trials") is not None:
+            for kv in self.cfg.params.enqueue_trials:
+                self.study.enqueue_trial(eval(kv))
+
         return self.study
 
-    def create_optuna_train_config(self):
-        train_config_path = self.cfg.train.config_path
-        train_cfg = DictConfig(yaml.load(open(train_config_path).read(), Loader=yaml.SafeLoader))
-        train_cfg.mlflow.experiment_name = self.cfg.mlflow.experiment_name
-        train_cfg["mlflow"]["nest"] = True
+    def create_optuna_train_config(self, trial: optuna.trial.Trial):
+        train_cfg = copy.deepcopy(self.cfg.train)
+        train_cfg = utils.set_keyval2DictConfig(train_cfg, "mlflow.experiment_name", self.cfg.mlflow.experiment_name)
+        train_cfg = utils.set_keyval2DictConfig(train_cfg, "mlflow.is_nested", True)
+
+        for sg in self.cfg.params.suggets:
+            param_name = sg[0]
+            val = eval(f"trial.{sg[1]}(param_name, {sg[2]}, {sg[3]})")
+            train_cfg = utils.set_keyval2DictConfig(train_cfg, param_name, val)
+
         return train_cfg
+
+    def save_optuna_hist_callback(self, trial: optuna.trial.Trial, val: float) -> None:
+        hist_df = self.study.trials_dataframe(multi_index=True)
+        hist_df.to_csv(f"{self.artifact_dir_path}/hist_df.csv", index=False)
+        for k, v in self.study.best_trials[0].params.items():
+            mlflow.log_metric(f"best_{k}", v)
+        mlflow.log_metric("best_value", self.study.best_trials[0].values[0])
+
+    def copy2atifact(self, src_path: str) -> None:
+        """copy file 2 mlflow artifact dir path.
+        """
+        dst_path = f"{self.artifact_dir_path}/{os.path.basename(src_path)}"
+        shutil.copy(src_path, dst_path)
 
     def log_artifacts_hydra_output(self) -> None:
         """hydra output directory is registerd at mlflow artifact.

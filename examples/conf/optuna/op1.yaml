@@ -1,1 +1,9 @@
-name: "op1"
+mlflow:
+  experiment_name: "test_tune1"
+
+params:
+  study_name: "op1"
+  n_trials: 10
+  direction: "maximize"
+  suggets:
+  - ["params.p1", suggest_int, 3, 4]

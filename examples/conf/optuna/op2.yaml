@@ -1,1 +1,13 @@
-name: "op2"
+mlflow:
+  experiment_name: "test_tune1"
+
+params:
+  study_name: "op2"
+  n_trials: 15
+  direction: "maximize"
+  suggets:
+  - ["params.p1", suggest_int, 3, 5]
+  - ["params.p2", suggest_int, 20, 48]
+  enqueue_trials:
+  - '{"params.p1":3,"params.p2":25}'
+  - '{"params.p1":5,"params.p2":48}'

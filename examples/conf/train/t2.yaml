@@ -1,1 +1,6 @@
-p: 2
+mlflow:
+  experiment_name: "test_train1"
+
+params:
+  p1: 15
+  p2: 25
