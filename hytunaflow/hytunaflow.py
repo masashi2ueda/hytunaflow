@@ -138,7 +138,7 @@ class Hytunaflow:
 
     def create_optuna_train_config(self, trial: optuna.trial.Trial):
         train_cfg = copy.deepcopy(self.cfg.train)
-        train_cfg = utils.set_keyval2DictConfig(train_cfg, "mlflow.experiment_name", self.cfg.mlflow.experiment_name)
+        train_cfg = utils.set_keyval2DictConfig(train_cfg, "mlflow.exp_name", self.cfg.mlflow.exp_name)
         train_cfg = utils.set_keyval2DictConfig(train_cfg, "mlflow.is_nested", True)
 
         for sg in self.cfg.params.suggets:
