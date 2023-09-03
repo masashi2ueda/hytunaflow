@@ -29,16 +29,16 @@ class Hytunaflow:
                 Defaults to True.
         """
         self.cfg = cfg
-        print(cfg)
         if is_set_random_seed:
             random.seed(datetime.now().timestamp())
 
         if self.is_dummy:
             return
 
-        mlflow.set_experiment(cfg.mlflow.experiment_name)
+        mlflow.set_experiment(cfg.mlflow.exp_name)
 
         self.flow_run = mlflow.start_run(nested=self.is_nested)
+        self.cfg = utils.set_keyval2DictConfig(self.cfg, "mlflow.run_id", self.flow_run.info.run_id)
 
         self._save_git_hash()
 
